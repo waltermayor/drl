@@ -3,6 +3,10 @@ import time
 import jax.numpy as jnp
 import numpy as np
 import wandb
+from utils.ppo_metrics import (
+    compute_ranks_from_features,
+    compute_feature_norms
+)
 
 batch_logs = {}
 log_times = []
@@ -12,7 +16,15 @@ def create_log_dict(info, config):
     to_log = {
         "episode_return": info["returned_episode_returns"],
         "episode_length": info["returned_episode_lengths"],
+        "example": info["example"],
+        "example2": info["example2"],
     }
+
+    if(config['ANALYZE_STRUCTURE']):
+        to_log["feature_actor"] = info["feature_actor"]
+        to_log["feature_pre_actor"] = info["feature_pre_actor"]
+        to_log["feature_critic"] = info["feature_critic"]
+        to_log["feature_pre_critic"] = info["feature_pre_critic"]    
 
     sum_achievements = 0
     for k, v in info.items():
@@ -41,7 +53,7 @@ def batch_log(update_step, log, config):
         batch_logs[update_step] = []
 
     batch_logs[update_step].append(log)
-
+    print("len batch_logs: ", len(batch_logs[update_step]))
     if len(batch_logs[update_step]) == config["NUM_REPEATS"]:
         agg_logs = {}
         for key in batch_logs[update_step][0]:
@@ -51,9 +63,18 @@ def batch_log(update_step, log, config):
             else:
                 for i in range(config["NUM_REPEATS"]):
                     val = batch_logs[update_step][i][key]
-                    if not jnp.isnan(val):
-                        agg.append(val)
+                    
+                    #print("val: ",type(val))
+                    if val.ndim==0:
+                        if not jnp.isnan(val):
+                            #print("val: ", val)
+                            agg.append(val)
+                    else:
+                        if not jnp.isnan(val).any():
+                            agg.append(val)
 
+                    
+            features_model = []
             if len(agg) > 0:
                 if key in [
                     "episode_length",
@@ -62,10 +83,26 @@ def batch_log(update_step, log, config):
                     "e_mean",
                     "e_std",
                     "rnd_loss",
+                    "example",
+                    "example2",
                 ]:
                     agg_logs[key] = np.mean(agg)
                 else:
-                    agg_logs[key] = np.array(agg)
+                     agg_logs[key] = np.array(agg)
+
+                if key in [
+                    "feature_actor",
+                    "feature_pre_actor",
+                    "feature_critic",
+                    "feature_pre_critic"
+                ]:
+                    print("all: ",jnp.array(agg).shape)
+                    mean_agg = np.mean(agg,axis=0)
+                    print("after mean: ", mean_agg.shape)
+                    features_model.append(mean_agg)
+                    # ranks = compute_ranks_from_features(mean_agg)
+                    # print(ranks)
+
 
         log_times.append(time.time())
 

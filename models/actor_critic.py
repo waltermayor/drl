@@ -133,16 +133,32 @@ class ActorCritic(nn.Module):
 
     @nn.compact
     def __call__(self, x):
+        
+        model_metrics_actor = {}
+        model_metrics_critic = {}
+        model_metrics_ppo = {}
         if self.activation == "relu":
             activation = nn.relu
         else:
             activation = nn.tanh
-
+        
+        model_metrics_actor['feature_input_actor'] = x 
         actor_mean = nn.Dense(
             self.layer_width,
             kernel_init=orthogonal(np.sqrt(2)),
             bias_init=constant(0.0),
         )(x)
+        
+        model_metrics_actor['features_dense1_actor'] = actor_mean
+        actor_mean = activation(actor_mean)
+        
+        actor_mean = nn.Dense(
+            self.layer_width,
+            kernel_init=orthogonal(np.sqrt(2)),
+            bias_init=constant(0.0),
+        )(actor_mean)
+        
+        model_metrics_actor['features_dense2_actor'] = actor_mean
         actor_mean = activation(actor_mean)
 
         actor_mean = nn.Dense(
@@ -150,25 +166,24 @@ class ActorCritic(nn.Module):
             kernel_init=orthogonal(np.sqrt(2)),
             bias_init=constant(0.0),
         )(actor_mean)
-        actor_mean = activation(actor_mean)
-
-        actor_mean = nn.Dense(
-            self.layer_width,
-            kernel_init=orthogonal(np.sqrt(2)),
-            bias_init=constant(0.0),
-        )(actor_mean)
+        
+        model_metrics_actor['features_dense3_actor'] = actor_mean
         actor_mean = activation(actor_mean)
 
         actor_mean = nn.Dense(
             self.action_dim, kernel_init=orthogonal(0.01), bias_init=constant(0.0)
         )(actor_mean)
+        
         pi = distrax.Categorical(logits=actor_mean)
 
+       
+        model_metrics_critic['feature_input_critic'] = x 
         critic = nn.Dense(
             self.layer_width,
             kernel_init=orthogonal(np.sqrt(2)),
             bias_init=constant(0.0),
         )(x)
+        model_metrics_critic['features_dense1_critic'] = critic 
         critic = activation(critic)
 
         critic = nn.Dense(
@@ -176,6 +191,7 @@ class ActorCritic(nn.Module):
             kernel_init=orthogonal(np.sqrt(2)),
             bias_init=constant(0.0),
         )(critic)
+        model_metrics_critic['features_dense2_critic'] = critic 
         critic = activation(critic)
 
         critic = nn.Dense(
@@ -183,13 +199,17 @@ class ActorCritic(nn.Module):
             kernel_init=orthogonal(np.sqrt(2)),
             bias_init=constant(0.0),
         )(critic)
+        model_metrics_critic['features_dense3_critic'] = critic 
         critic = activation(critic)
 
         critic = nn.Dense(1, kernel_init=orthogonal(1.0), bias_init=constant(0.0))(
             critic
         )
+        
+        model_metrics_ppo['actor'] =  model_metrics_actor
+        model_metrics_ppo['critic'] =  model_metrics_critic
 
-        return pi, jnp.squeeze(critic, axis=-1)
+        return pi, jnp.squeeze(critic, axis=-1), model_metrics_ppo
 
 
 class ActorCriticWithEmbedding(nn.Module):

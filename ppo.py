@@ -217,7 +217,7 @@ def make_train(config):
 
                 # SELECT ACTION
                 rng, _rng = jax.random.split(rng)
-                pi, value = network.apply(train_state.params, last_obs)
+                pi, value, model_metrics_ppo = network.apply(train_state.params, last_obs) 
                 action = pi.sample(seed=_rng)
                 log_prob = pi.log_prob(action)
 
@@ -314,7 +314,16 @@ def make_train(config):
                 rng,
                 update_step,
             ) = runner_state
-            _, last_val = network.apply(train_state.params, last_obs)
+            _, last_val, model_metrics_ppo_batch = network.apply(train_state.params, last_obs)
+            print("last_obs_size: ",last_obs.shape)
+            print("last_val_size: ",last_val.shape)
+            input_actor1 = np.mean(model_metrics_ppo_batch["actor"]["feature_input_actor"],axis=0)[jnp.newaxis, :]
+            print("metrics1: ", input_actor1.shape)
+            print(last_obs)
+            
+            #import pdb; pdb.set_trace()
+            # 1024, batch, dim_last_obs
+            # todo: last_val
 
             def _calculate_gae(traj_batch, last_val):
                 def _get_advantages(gae_and_next_value, transition):
@@ -350,7 +359,7 @@ def make_train(config):
                     # Policy/value network
                     def _loss_fn(params, traj_batch, gae, targets):
                         # RERUN NETWORK
-                        pi, value = network.apply(params, traj_batch.obs)
+                        pi, value, model_metrics_ppo = network.apply(params, traj_batch.obs)
                         log_prob = pi.log_prob(traj_batch.action)
 
                         # CALCULATE VALUE LOSS
@@ -422,7 +431,7 @@ def make_train(config):
                     shuffled_batch,
                 )
                 train_state, losses = jax.lax.scan(
-                    _update_minbatch, train_state, minibatches
+                    _update_minbatch, train_state, minibatches 
                 )
                 update_state = (
                     train_state,
@@ -450,6 +459,9 @@ def make_train(config):
                 / traj_batch.info["returned_episode"].sum(),
                 traj_batch.info,
             )
+            print("metric: ",metric) 
+            print("Achievements/cast_fireball: ",metric['Achievements/cast_fireball'].shape) 
+            print("returned_episode: ",metric['returned_episode'].shape) 
 
             rng = update_state[-1]
 
@@ -578,6 +590,25 @@ def make_train(config):
                 ex_state = ex_update_state[0]
                 rng = ex_update_state[-1]
 
+
+            actor1=np.mean(model_metrics_ppo_batch["actor"]["feature_input_actor"],axis=0)[jnp.newaxis, :]
+            actor2=np.mean(model_metrics_ppo_batch["actor"]["features_dense3_actor"],axis=0)[jnp.newaxis, :]
+            critic1=np.mean(model_metrics_ppo_batch["critic"]["feature_input_critic"],axis=0)[jnp.newaxis, :]
+            critic2=np.mean(model_metrics_ppo_batch["critic"]["features_dense3_critic"],axis=0)[jnp.newaxis, :]
+
+            print(actor1.shape)
+            print(actor2.shape)
+            print(critic1.shape)
+            print(critic2.shape)
+
+
+            metric['feature_actor']=actor1
+            metric['feature_pre_actor']=actor2
+            metric['feature_critic']=critic1
+            metric['feature_pre_critic']=critic2
+            metric['example']= 10
+            metric['example2']= metric['returned_episode']
+
             # wandb logging
             if config["DEBUG"] and config["USE_WANDB"]:
 
@@ -671,15 +702,15 @@ if __name__ == "__main__":
     parser.add_argument(
         "--num_envs",
         type=int,
-        default=1024,
+        default=1024,#1024
     )
     parser.add_argument(
-        "--total_timesteps", type=lambda x: int(float(x)), default=1e9
+        "--total_timesteps", type=lambda x: int(float(x)), default=1e6 #1e9 
     )  # Allow scientific notation
     parser.add_argument("--lr", type=float, default=2e-4)
-    parser.add_argument("--num_steps", type=int, default=64)
-    parser.add_argument("--update_epochs", type=int, default=4)
-    parser.add_argument("--num_minibatches", type=int, default=8)
+    parser.add_argument("--num_steps", type=int, default=12)  #64
+    parser.add_argument("--update_epochs", type=int, default=2) #4
+    parser.add_argument("--num_minibatches", type=int, default=4 )#8
     parser.add_argument("--gamma", type=float, default=0.99)
     parser.add_argument("--gae_lambda", type=float, default=0.8)
     parser.add_argument("--clip_eps", type=float, default=0.2)
@@ -697,10 +728,10 @@ if __name__ == "__main__":
         "--use_wandb", action=argparse.BooleanOptionalAction, default=True
     )
     parser.add_argument("--save_policy", action="store_true")
-    parser.add_argument("--num_repeats", type=int, default=1)
+    parser.add_argument("--num_repeats", type=int, default=2)
     parser.add_argument("--layer_size", type=int, default=512)
-    parser.add_argument("--wandb_project", type=str)
-    parser.add_argument("--wandb_entity", type=str)
+    parser.add_argument("--wandb_project", type=str, default="transformer-paper")
+    parser.add_argument("--wandb_entity", type=str, default="waltermayorrl")
     parser.add_argument(
         "--use_optimistic_resets", action=argparse.BooleanOptionalAction, default=True
     )
@@ -720,6 +751,8 @@ if __name__ == "__main__":
     parser.add_argument("--e3b_reward_coeff", type=float, default=1.0)
     parser.add_argument("--use_e3b", action="store_true")
     parser.add_argument("--e3b_lambda", type=float, default=0.1)
+
+    parser.add_argument("--analyze_structure", action=argparse.BooleanOptionalAction, default=False)
 
     args, rest_args = parser.parse_known_args(sys.argv[1:])
     if rest_args:
