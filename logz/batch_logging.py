@@ -16,8 +16,13 @@ def create_log_dict(info, config):
     to_log = {
         "episode_return": info["returned_episode_returns"],
         "episode_length": info["returned_episode_lengths"],
-        "example": info["example"],
-        "example2": info["example2"],
+        "mean_norm_input_features": info["mean_norm_input_features"],
+        "mean_norm_actor_preoutput_features": info["mean_norm_actor_preoutput_features"],
+        "mean_norm_critic_preoutput_features": info["mean_norm_critic_preoutput_features"],
+        "mean_norm_Dense_0_kernel": info["mean_norm_Dense_0_kernel"],
+        "mean_norm_Dense_0_bias": info["mean_norm_Dense_0_bias"],
+        "mean_norm_Dense_6_kernel": info["mean_norm_Dense_6_kernel"],
+        "mean_norm_Dense_6_bias": info["mean_norm_Dense_6_bias"],
     }
 
     if(config['ANALYZE_STRUCTURE']):
@@ -83,8 +88,13 @@ def batch_log(update_step, log, config):
                     "e_mean",
                     "e_std",
                     "rnd_loss",
-                    "example",
-                    "example2",
+                    "mean_norm_input_features",
+                    "mean_norm_actor_preoutput_features",
+                    "mean_norm_critic_preoutput_features",
+                    "mean_norm_Dense_0_kernel",
+                    "mean_norm_Dense_0_bias",
+                    "mean_norm_Dense_6_kernel",
+                    "mean_norm_Dense_6_bias",
                 ]:
                     agg_logs[key] = np.mean(agg)
                 else:

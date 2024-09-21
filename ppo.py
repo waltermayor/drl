@@ -33,6 +33,11 @@ from wrappers import (
     AutoResetEnvWrapper,
 )
 
+from utils.metrics import (
+    compute_norms_from_features,
+    compute_bias_and_kernel_norms_from_params,
+)
+
 # Code adapted from the original implementation made by Chris Lu
 # Original code located at https://github.com/luchris429/purejaxrl
 
@@ -317,8 +322,6 @@ def make_train(config):
             _, last_val, model_metrics_ppo_batch = network.apply(train_state.params, last_obs)
             print("last_obs_size: ",last_obs.shape)
             print("last_val_size: ",last_val.shape)
-            input_actor1 = np.mean(model_metrics_ppo_batch["actor"]["feature_input_actor"],axis=0)[jnp.newaxis, :]
-            print("metrics1: ", input_actor1.shape)
             print(last_obs)
             
             #import pdb; pdb.set_trace()
@@ -453,16 +456,14 @@ def make_train(config):
                 _update_epoch, update_state, None, config["UPDATE_EPOCHS"]
             )
 
+            #import pdb; pdb.set_trace()
             train_state = update_state[0]
             metric = jax.tree.map(
                 lambda x: (x * traj_batch.info["returned_episode"]).sum()
                 / traj_batch.info["returned_episode"].sum(),
                 traj_batch.info,
             )
-            print("metric: ",metric) 
-            print("Achievements/cast_fireball: ",metric['Achievements/cast_fireball'].shape) 
-            print("returned_episode: ",metric['returned_episode'].shape) 
-
+            
             rng = update_state[-1]
 
             # UPDATE EXPLORATION STATE
@@ -590,24 +591,12 @@ def make_train(config):
                 ex_state = ex_update_state[0]
                 rng = ex_update_state[-1]
 
-
-            actor1=np.mean(model_metrics_ppo_batch["actor"]["feature_input_actor"],axis=0)[jnp.newaxis, :]
-            actor2=np.mean(model_metrics_ppo_batch["actor"]["features_dense3_actor"],axis=0)[jnp.newaxis, :]
-            critic1=np.mean(model_metrics_ppo_batch["critic"]["feature_input_critic"],axis=0)[jnp.newaxis, :]
-            critic2=np.mean(model_metrics_ppo_batch["critic"]["features_dense3_critic"],axis=0)[jnp.newaxis, :]
-
-            print(actor1.shape)
-            print(actor2.shape)
-            print(critic1.shape)
-            print(critic2.shape)
-
-
-            metric['feature_actor']=actor1
-            metric['feature_pre_actor']=actor2
-            metric['feature_critic']=critic1
-            metric['feature_pre_critic']=critic2
-            metric['example']= 10
-            metric['example2']= metric['returned_episode']
+            #import pdb; pdb.set_trace()
+            metric['mean_norm_input_features']= compute_norms_from_features(model_metrics_ppo_batch["actor"]["feature_input_actor"])
+            metric['mean_norm_actor_preoutput_features']= compute_norms_from_features(model_metrics_ppo_batch["actor"]["features_dense3_actor"])
+            metric['mean_norm_critic_preoutput_features']= compute_norms_from_features(model_metrics_ppo_batch["critic"]["features_dense3_critic"])
+            #import pdb; pdb.set_trace()
+            metric.update(compute_bias_and_kernel_norms_from_params(train_state.params['params']))
 
             # wandb logging
             if config["DEBUG"] and config["USE_WANDB"]:
